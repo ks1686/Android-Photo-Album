@@ -2,7 +2,6 @@ package com.example.photos;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -13,7 +12,6 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -22,276 +20,216 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.movies.R;
+import com.bumptech.glide.Glide;
+import com.example.photos.R;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class OpenAlbum extends AppCompatActivity {
 
+    public static final String ALBUM_NAME = "albumName";
+    public static final String ALBUM_INDEX = "albumIndex";
+    public static final int DELETE_ALBUM_RESULT = 2;
+
+    private int albumIndex;
+    private boolean searchMode;
+    private Album album;
+    private EditText albumName;
+    private ImageAdapter imageAdapter;
+    private final ActivityResultLauncher<String[]> pickImage = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument() {
+                @NonNull
+                @Override
+                public Intent createIntent(@NonNull Context context, @NonNull String[] input) {
+                    Intent intent = super.createIntent(context, input);
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                    return intent;
+                }
+            },
+            uri -> {
+                if (uri == null || album == null) {
+                    return;
+                }
+                try {
+                    getContentResolver().takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (SecurityException ignored) {
+                    // persistable grant is best-effort; the current session can still read the URI
+                }
+                try {
+                    album.addPhoto(new Photo(uri.toString()));
+                    imageAdapter.updatePhotos(album.getPhotos());
+                    Photos.saveAlbumsToFile(this);
+                } catch (IllegalArgumentException e) {
+                    Toast.makeText(this, R.string.photo_already_in_album, Toast.LENGTH_SHORT).show();
+                }
+            });
+
     public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHolder> {
-        private Context context;
-        private List<Photo> photos;
+        private final List<Photo> photos = new ArrayList<>();
 
-        // constructor to create the image adapter
-        public ImageAdapter(Context context, List<Photo> photos) {
-            this.context = context;
-            this.photos = photos;
-        }
-
-        // method to create the image view holder
         @NonNull
         @Override
         public ImageViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(context).inflate(R.layout.image_item, parent, false);
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.image_item, parent, false);
             return new ImageViewHolder(view);
         }
 
-        // method to bind the image view holder
         @Override
         public void onBindViewHolder(@NonNull ImageViewHolder holder, int position) {
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("image/*");
-
             Photo photo = photos.get(position);
-            holder.imageView.setImageURI(Uri.parse(photo.getFilePath()));
+            Glide.with(holder.imageView)
+                    .load(Uri.parse(photo.getFilePath()))
+                    .centerCrop()
+                    .into(holder.imageView);
+            holder.imageView.setContentDescription(getString(R.string.photo_content_description, position + 1));
         }
 
-        // method to get the number of photos
         @Override
         public int getItemCount() {
             return photos.size();
         }
 
-        // method to update the photos
         public void updatePhotos(List<Photo> newPhotos) {
-            photos = newPhotos;
+            photos.clear();
+            if (newPhotos != null) {
+                photos.addAll(newPhotos);
+            }
             notifyDataSetChanged();
         }
 
-        // inner class to hold the image view
         public class ImageViewHolder extends RecyclerView.ViewHolder {
-            ImageView imageView;
+            final ImageView imageView;
 
             public ImageViewHolder(@NonNull View itemView) {
                 super(itemView);
                 imageView = itemView.findViewById(R.id.image_view);
-                imageView.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        // open display photo view here
-                        System.out.println("Photo clicked");
-
-                        // get the photo that was clicked
-                        Photo photo = photos.get(getAdapterPosition());
-                        String photoFilePath = photo.getFilePath();
-
-                        // ! Testing: print the photoFilePath
-                        System.out.println("photoFilePath: " + photoFilePath);
-
-                        // create a new intent to open the photo
-                        Intent intent = new Intent(context, OpenPhoto.class);
-
-                        // create a bundle with albumIndex and photoFilePath
-                        Bundle bundle = new Bundle();
-                        bundle.putInt("albumIndex", albumIndex);
-                        bundle.putString("photoFilepath", photoFilePath);
-                        intent.putExtras(bundle);
-                        context.startActivity(intent);
+                imageView.setOnClickListener(v -> {
+                    int position = getBindingAdapterPosition();
+                    if (position == RecyclerView.NO_POSITION) {
+                        return;
                     }
+                    Photo photo = photos.get(position);
+                    Intent intent = new Intent(OpenAlbum.this, OpenPhoto.class);
+                    intent.putExtra(OpenPhoto.ALBUM_INDEX, albumIndex);
+                    intent.putExtra(OpenPhoto.PHOTO_FILEPATH, photo.getFilePath());
+                    startActivity(intent);
                 });
             }
         }
-
     }
 
-    public static String ALBUM_NAME = "albumName";
-    public static String ALBUM_INDEX = "albumIndex";
-    private int albumIndex;
-
-    private EditText albumName;
-    private Button deleteAlbumButton;
-    private Toolbar myToolbar;
-    private Button addPhotoButton;
-    private RecyclerView imageListView;
-    private ImageAdapter imageAdapter;
-
-    private Button renameAlbumButton;
-
-    //! ERROR: NEVER PASSING THE PROPER albumIndex
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.open_album);
-        myToolbar = findViewById(R.id.my_toolbar);
-
-        setSupportActionBar(myToolbar);
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-
-        deleteAlbumButton = findViewById(R.id.delete_album_button);
-        deleteAlbumButton.setOnClickListener(view -> deleteAlbum());
-
-        addPhotoButton = findViewById(R.id.add_photo_button);
-        addPhotoButton.setOnClickListener(view -> selectImage());
-
-        renameAlbumButton = findViewById(R.id.rename_album_button);
-        renameAlbumButton.setOnClickListener(view -> renameAlbum());
-
-
-        imageListView = findViewById(R.id.image_list_view);
-        int numberOfColumns = 3;
-        imageListView.setLayoutManager(new GridLayoutManager(this, numberOfColumns));
-
-        // print the album name and index
-        // ! ERROR: NEVER PASSING THE PROPER albumIndex or albumName
-        System.out.println("Test: " + albumIndex + " " + Photos.albums.get(albumIndex).getAlbumName());
-        //print the ALBUM_INDEX and ALBUM_NAME
-        System.out.println("Test: " + ALBUM_INDEX + " " + ALBUM_NAME);
-        Album album = Photos.albums.get(albumIndex);
-        imageAdapter = new ImageAdapter(this, album.getPhotos());
-        imageListView.setAdapter(imageAdapter);
-
-        myToolbar.setNavigationOnClickListener(view -> returnToAlbumsList());
-
-        albumName = findViewById(R.id.album_name);
 
         Bundle extras = getIntent().getExtras();
-        if (extras != null) {
-            albumIndex = extras.getInt("albumIndex", -1);
-            albumName.setText(extras.getString("albumName"));
-
-            // handle if albumIndex is -1
-            if (albumIndex == -1) {
-                Toast.makeText(this, "Album index not found", Toast.LENGTH_SHORT).show();
-                return;
-            }
-        } else {
-            Toast.makeText(this, "No album index found", Toast.LENGTH_SHORT).show();
+        if (extras == null) {
+            Toast.makeText(this, R.string.album_not_found, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+        albumIndex = extras.getInt(ALBUM_INDEX, -1);
+        searchMode = albumIndex == Photos.SEARCH_RESULTS_INDEX;
+        album = Photos.albumAt(albumIndex);
+        if (album == null) {
+            Toast.makeText(this, R.string.album_not_found, Toast.LENGTH_SHORT).show();
+            finish();
             return;
         }
 
-        //Print albumIndex and albumName
-        System.out.println("albumIndex: " + albumIndex);
+        Toolbar myToolbar = findViewById(R.id.my_toolbar);
+        setSupportActionBar(myToolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+        myToolbar.setNavigationOnClickListener(view -> finish());
 
-        albumName.setText(extras.getString(ALBUM_NAME));
+        albumName = findViewById(R.id.album_name);
+        String extraName = extras.getString(ALBUM_NAME, album.getAlbumName());
+        albumName.setText(extraName);
 
+        Button deleteAlbumButton = findViewById(R.id.delete_album_button);
+        Button addPhotoButton = findViewById(R.id.add_photo_button);
+        Button renameAlbumButton = findViewById(R.id.rename_album_button);
+        deleteAlbumButton.setOnClickListener(view -> deleteAlbum());
+        addPhotoButton.setOnClickListener(view -> {
+            pickImage.launch(new String[]{"image/*"});
+        });
+        renameAlbumButton.setOnClickListener(view -> renameAlbum());
 
+        if (searchMode) {
+            deleteAlbumButton.setVisibility(View.GONE);
+            addPhotoButton.setVisibility(View.GONE);
+            renameAlbumButton.setVisibility(View.GONE);
+            albumName.setEnabled(false);
+        }
 
-        // update the view with the correct album (based on the corret albumIndex)
-        imageAdapter.updatePhotos(Photos.albums.get(albumIndex).getPhotos());
+        RecyclerView imageListView = findViewById(R.id.image_list_view);
+        imageListView.setLayoutManager(new GridLayoutManager(this, 3));
+        imageAdapter = new ImageAdapter();
+        imageListView.setAdapter(imageAdapter);
+        imageAdapter.updatePhotos(album.getPhotos());
     }
 
-    static final int REQUEST_IMAGE_GET = 1;
-
-    public void onImageChosen(ActivityResult result) {
-        System.out.println("In onImageChosen");
+    @Override
+    protected void onResume() {
+        super.onResume();
+        album = Photos.albumAt(albumIndex);
+        if (album == null || imageAdapter == null) {
+            finish();
+            return;
+        }
+        imageAdapter.updatePhotos(album.getPhotos());
+        if (albumName != null) {
+            albumName.setText(album.getAlbumName());
+        }
     }
-
-
-    public void returnToAlbumsList(){
-        // save the albums to the file
-        Photos.saveAlbumsToFile(this);
-
-
-        // go back to the main activity
-        Intent intent = new Intent(this, Photos.class);
-        startActivity(intent);
-
-        finish();
-    }
-
-    //custom result value for deleteAlbum
-    public static final int DELETE_ALBUM_RESULT = 2;
 
     public void deleteAlbum() {
+        if (searchMode) {
+            finish();
+            return;
+        }
         Intent intent = new Intent();
         intent.putExtra(ALBUM_INDEX, albumIndex);
         setResult(DELETE_ALBUM_RESULT, intent);
         finish();
     }
 
-    // method to rename the album
     public void renameAlbum() {
-        String albumNameString = albumName.getText().toString();
+        if (searchMode) {
+            return;
+        }
+        String albumNameString = albumName.getText().toString().trim();
         try {
-            Photos.albums.get(albumIndex).setAlbumName(albumNameString);
+            if (albumNameString.isEmpty()) {
+                Toast.makeText(this, R.string.album_name_empty, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (AlbumStore.albumNameExists(Photos.albums, albumNameString, album)) {
+                Toast.makeText(this, R.string.album_name_exists, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            album.setAlbumName(albumNameString);
         } catch (IllegalArgumentException e) {
-            Toast.makeText(this, "An album with name already exists.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.album_name_exists, Toast.LENGTH_SHORT).show();
             return;
         }
         Photos.saveAlbumsToFile(this);
-
-        //toast to show that the album has been renamed
-        Toast.makeText(this, "Album renamed", Toast.LENGTH_SHORT).show();
+        Intent result = new Intent();
+        result.putExtra(ALBUM_INDEX, albumIndex);
+        result.putExtra(ALBUM_NAME, album.getAlbumName());
+        setResult(RESULT_OK, result);
+        Toast.makeText(this, R.string.album_renamed, Toast.LENGTH_SHORT).show();
     }
 
-    public void selectImage() {
-        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.setType("image/*");
-        intent.putExtra("albumIndex", albumIndex);
-        intent.putExtra("albumName", albumName.getText().toString());
-        startActivityForResult(intent, REQUEST_IMAGE_GET);
-
-    }
-
-    // method to save the updated album with the new photo
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        System.out.println("In onActivityResult in OpenAlbum.java");
-        if (requestCode == REQUEST_IMAGE_GET && resultCode == RESULT_OK) {
-
-            if (data != null) {
-                Uri uri = data.getData();
-
-                // get READ_URI_PERMISSION
-                getContentResolver()
-                        .takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-                // get the string filepath for the single photo
-                String filePath = uri.toString();
-                // if filepath not null, add to the album
-                if (filePath != null) {
-                    try {
-                        Photos.albums.get(albumIndex).addPhoto(new Photo(filePath));
-                    } catch (IllegalArgumentException e) {
-                        Toast.makeText(this, "Photo already exists in album", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    imageAdapter.updatePhotos(Photos.albums.get(albumIndex).getPhotos());
-                } else {
-                    Toast.makeText(this, "No photo selected", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                // print all albums and their photos
-                System.out.println("Printing out all albums and their photo filepaths");
-                for (Album album : Photos.albums) {
-                    System.out.println(album.getAlbumName());
-                    for (Photo photo : album.getPhotos()) {
-                        System.out.println(photo.getFilePath());
-                    }
-                }
-            }
-
-            System.out.println("In onActivityResult in OpenAlbum.java, albums is " + Photos.albums);
-            Photos.saveAlbumsToFile(this);
-        }
-    }
-
-    // override back button to save the albums to the file and open the main activity
-    @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        Photos.saveAlbumsToFile(this);
-        Intent intent = new Intent(this, Photos.class);
-        startActivity(intent);
+    public boolean onSupportNavigateUp() {
         finish();
+        return true;
     }
 }

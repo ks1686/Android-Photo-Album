@@ -1,24 +1,24 @@
 package com.example.photos;
 
-// Java imports
-
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Represents an album of photos. An album has a name and a list of photos. An
- * album can be created with a name and a list of photos. An album can have
- * photos added to it, removed from it, and moved to another album. An album can
- * be searched for photos based on tags or dates. An album can have its name
- * changed. An album can have its start and end dates retrieved.
- *
- * @author jacobjude
+ * An album of photos. Name uniqueness is enforced by callers, not this class.
  */
 public class Album implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private static final Pattern OPERATOR = Pattern.compile("(?i)\\s+(AND|OR)\\s+");
+    private static final Pattern TAG_PAIR = Pattern.compile("^\\s*([^=]+?)=(.*\\S)\\s*$");
+
     private String albumName;
-    private List<Photo> photos;
+    private final List<Photo> photos;
     public boolean isTempAlbum = false;
 
     /**
@@ -40,19 +40,13 @@ public class Album implements Serializable {
      * @throws NullPointerException     if albumName or photos is null
      * @throws IllegalArgumentException if albumName is empty
      */
-    public Album(String albumName, List<Photo> photos) throws NullPointerException, IllegalArgumentException {
-        if (albumName == null) {
-            throw new NullPointerException("albumName cannot be null");
-        } else if (albumName.isEmpty()) {
-            throw new IllegalArgumentException("albumName cannot be empty");
-        }
+    public Album(String albumName, List<Photo> photos) {
         if (photos == null) {
             throw new NullPointerException("photos cannot be null");
         }
-        this.albumName = albumName;
-        setAlbumName(albumName); // throws error if album with same name already exists
-        this.photos = photos;
-        this.isTempAlbum = false; // by default, must set to true manually
+        setAlbumName(albumName);
+        this.photos = new ArrayList<>(photos);
+        this.isTempAlbum = false;
     }
 
     /**
@@ -79,7 +73,7 @@ public class Album implements Serializable {
      * @param filepath the filepath of the photo to add
      */
     public void addPhoto(String filepath) {
-        this.photos.add(new Photo(filepath)); // may need to catch an exception here?
+        addPhoto(new Photo(filepath));
     }
 
     /**
@@ -97,10 +91,27 @@ public class Album implements Serializable {
      * @return arrayList of photos
      */
     public List<Photo> getPhotos() {
-        if (this.photos == null) {
-            return new ArrayList<>();
+        return Collections.unmodifiableList(this.photos);
+    }
+
+    public Photo findByFilePath(String filepath) {
+        int index = indexOfFilePath(filepath);
+        if (index < 0) {
+            return null;
         }
-        return new ArrayList<>(this.photos);
+        return photos.get(index);
+    }
+
+    public int indexOfFilePath(String filepath) {
+        if (filepath == null) {
+            return -1;
+        }
+        for (int i = 0; i < photos.size(); i++) {
+            if (photos.get(i).getFilePath().equals(filepath)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -119,19 +130,12 @@ public class Album implements Serializable {
      * @throws NullPointerException     if albumName is null
      * @throws IllegalArgumentException if albumName is empty
      */
-    public void setAlbumName(String albumName) throws NullPointerException, IllegalArgumentException {
+    public void setAlbumName(String albumName) {
         if (albumName == null) {
             throw new NullPointerException("albumName cannot be null");
-        } else if (albumName.isEmpty()) {
-            throw new IllegalArgumentException("albumName cannot be empty");
         }
-
-        // check if there is another album with the same name
-        // potential issue: looks through static list of albums (but works)
-        for (Album album : Photos.albums) {
-            if (album.getAlbumName().equals(albumName) && !album.equals(this)) {
-                throw new IllegalArgumentException("Album with the same name already exists");
-            }
+        if (albumName.isEmpty()) {
+            throw new IllegalArgumentException("albumName cannot be empty");
         }
         this.albumName = albumName;
     }
@@ -150,27 +154,30 @@ public class Album implements Serializable {
      *
      * @return the string representation of the album
      */
+    @Override
     public String toString() {
-        // get the toString of all the photos in the album and album name
-        String result = "";
+        StringBuilder result = new StringBuilder();
         for (Photo photo : this.photos) {
-            result += photo.toString() + "\n";
+            result.append(photo).append('\n');
         }
         return "Album: " + this.albumName + "\nPhotos:\n" + result;
     }
 
+    @Override
     public boolean equals(Object o) {
         if (o == this) {
             return true;
         }
-
         if (!(o instanceof Album)) {
             return false;
         }
-
         Album album = (Album) o;
+        return album.getAlbumName().equals(this.albumName) && album.photos.equals(this.photos);
+    }
 
-        return album.getAlbumName().equals(this.albumName) && album.getPhotos().equals(this.photos);
+    @Override
+    public int hashCode() {
+        return Objects.hash(albumName, photos);
     }
 
     /**
@@ -181,97 +188,79 @@ public class Album implements Serializable {
      * @throws IllegalArgumentException if the query is invalid
      */
     public List<Photo> search(String query) {
-        List<Photo> result = new ArrayList<>();
-
-
-        // tags can look like "tagname=tagvalue" and can have conjunctions or
-        // disjuctions
-        // ex. person=John AND location=New York
-        // ex. person=John OR location=New York
-        // no need to handle more than 1 conjunction or disjunction
-
-        // split the query by " AND " or " OR "
-        // make the query all lowercase
-        query = query.toLowerCase();
-
-        String[] parts = query.strip().split(" AND | OR ");
-
-        // if the query is a single tag
-        if (parts.length == 1) {
-            // check if its of the form "tagname=tagvalue"
-
-            String[] tag = query.split("=");
-            if (tag.length != 2) {
-                throw new IllegalArgumentException("Invalid query");
-            }
-
-            if (!(query.strip().contains("=") || tag.length != 2 || tag[0].isEmpty() || tag[1].isEmpty())) {
-                throw new IllegalArgumentException("Invalid query");
-            }
-
-            if (tag[0].contains(" ") || tag[1].contains(" ")) {
-                throw new IllegalArgumentException("Invalid query");
-            }
-            for (Photo photo : this.photos) {
-                for (Map<String, String> currentTag : photo.getTags()) {
-                    if (currentTag.containsKey(tag[0]) && currentTag.get(tag[0]).startsWith(tag[1])) {
-                        result.add(photo);
-                    }
-                }
-            }
-            return result;
-        } else if (parts.length == 2) {
-            // if the query is a disjunction
-            if (query.contains(" OR ")) {
-                String[] tag1 = parts[0].split("=");
-                String[] tag2 = parts[1].split("=");
-                if (tag1[0].contains(" ") || tag1[1].contains(" ")) {
-                    throw new IllegalArgumentException("Invalid query");
-                }
-                if (tag2[0].contains(" ") || tag2[1].contains(" ")) {
-                    throw new IllegalArgumentException("Invalid query");
-                }
-                for (Photo photo : this.photos) {
-                    boolean found1 = false;
-                    boolean found2 = false;
-                    for (Map<String, String> tag : photo.getTags()) {
-                        if (tag.containsKey(tag1[0]) && tag.get(tag1[0]).startsWith(tag1[1])) {
-                            found1 = true;
-                        }
-                        if (tag.containsKey(tag2[0]) && tag.get(tag2[0]).startsWith(tag2[1])) {
-                            found2 = true;
-                        }
-                    }
-                    if (found1 || found2) {
-                        result.add(photo);
-                    }
-                }
-                return result;
-            } else if (query.contains(" AND ")) {
-                // if the query is a conjunction
-                String[] tag1 = parts[0].split("=");
-                String[] tag2 = parts[1].split("=");
-                for (Photo photo : this.photos) {
-                    boolean found1 = false;
-                    boolean found2 = false;
-                    for (Map<String, String> tag : photo.getTags()) {
-                        if (tag.containsKey(tag1[0]) && tag.get(tag1[0]).startsWith(tag1[1])) {
-                            found1 = true;
-                        }
-                        if (tag.containsKey(tag2[0]) && tag.get(tag2[0]).startsWith(tag2[1])) {
-                            found2 = true;
-                        }
-                    }
-                    if (found1 && found2) {
-                        result.add(photo);
-                    }
-                }
-                return result;
-            }
-
+        if (query == null) {
+            throw new IllegalArgumentException("Invalid query");
+        }
+        String trimmed = query.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("Invalid query");
         }
 
-        throw new IllegalArgumentException("Invalid query");
+        Matcher operatorMatcher = OPERATOR.matcher(trimmed);
+        String operator = null;
+        int operatorCount = 0;
+        int firstStart = -1;
+        int firstEnd = -1;
+        while (operatorMatcher.find()) {
+            operatorCount++;
+            if (operatorCount == 1) {
+                operator = operatorMatcher.group(1).toUpperCase(Locale.ROOT);
+                firstStart = operatorMatcher.start();
+                firstEnd = operatorMatcher.end();
+            }
+        }
+        if (operatorCount > 1) {
+            throw new IllegalArgumentException("Invalid query");
+        }
+
+        if (operatorCount == 0) {
+            String[] pair = parseTagPair(trimmed);
+            return collectMatches(pair[0], pair[1], null, null, false);
+        }
+
+        String left = trimmed.substring(0, firstStart);
+        String right = trimmed.substring(firstEnd);
+        String[] first = parseTagPair(left);
+        String[] second = parseTagPair(right);
+        boolean requireBoth = "AND".equals(operator);
+        return collectMatches(first[0], first[1], second[0], second[1], requireBoth);
+    }
+
+    private static String[] parseTagPair(String raw) {
+        Matcher matcher = TAG_PAIR.matcher(raw);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid query");
+        }
+        String key = matcher.group(1).trim();
+        String value = matcher.group(2).trim();
+        if (key.isEmpty() || value.isEmpty() || key.contains("=")) {
+            throw new IllegalArgumentException("Invalid query");
+        }
+        return new String[]{key, value};
+    }
+
+    private List<Photo> collectMatches(
+            String key1,
+            String value1,
+            String key2,
+            String value2,
+            boolean requireBoth
+    ) {
+        List<Photo> result = new ArrayList<>();
+        for (Photo photo : this.photos) {
+            boolean first = photo.hasTagMatch(key1, value1);
+            if (key2 == null) {
+                if (first) {
+                    result.add(photo);
+                }
+                continue;
+            }
+            boolean second = photo.hasTagMatch(key2, value2);
+            if (requireBoth ? (first && second) : (first || second)) {
+                result.add(photo);
+            }
+        }
+        return result;
     }
 
 }
