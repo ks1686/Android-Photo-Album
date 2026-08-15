@@ -1,12 +1,9 @@
 package com.example.photos;
 
 import android.app.AlertDialog;
-import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -14,33 +11,23 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-import androidx.constraintlayout.widget.ConstraintLayout;
-import androidx.core.widget.NestedScrollView;
 
-import com.example.movies.R;
+import com.bumptech.glide.Glide;
+import com.example.photos.R;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class OpenPhoto extends AppCompatActivity {
 
-    public static String PHOTO_FILEPATH = "photoFilepath";
-    public static String ALBUM_INDEX = "albumIndex";
+    public static final String PHOTO_FILEPATH = "photoFilepath";
+    public static final String ALBUM_INDEX = "albumIndex";
+
     private String photoFilepath = "";
-    public int albumIndex;
+    private int albumIndex;
+    private Album album;
 
-    private Toolbar displayPhotoToolbar;
     private ImageView photoView;
-    private Button prevPhotoButton;
-    private Button nextPhotoButton;
-    private Button addTagButton;
-    private Button removeTagButton;
-    private Button moveButton;
-    private Button deleteButton;
-    private Button backButton;
-
-    private NestedScrollView tagsScrollView;
-    private ConstraintLayout tagsLinearLayout;
     private TextView tagsTextView;
 
     @Override
@@ -48,328 +35,230 @@ public class OpenPhoto extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.display_photo);
 
-        // Initialize your UI components
-
-        //! bug, after moving a photo, if you press the back button in the toolbar, it will not go back to the album view
-        displayPhotoToolbar = findViewById(R.id.display_photo_toolbar);
+        Toolbar displayPhotoToolbar = findViewById(R.id.display_photo_toolbar);
         displayPhotoToolbar.setTitle("");
+        setSupportActionBar(displayPhotoToolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+        displayPhotoToolbar.setNavigationOnClickListener(view -> finish());
 
         photoView = findViewById(R.id.photo_view);
-        prevPhotoButton = findViewById(R.id.prev_photo_button);
-        nextPhotoButton = findViewById(R.id.next_photo_button);
-        addTagButton = findViewById(R.id.add_tag);
-        removeTagButton = findViewById(R.id.remove_tag);
-        moveButton = findViewById(R.id.move_button);
-        deleteButton = findViewById(R.id.delete_button);
         tagsTextView = findViewById(R.id.tags_textView);
-        backButton = findViewById(R.id.back_button);
 
-
-        // Set the toolbar as the action bar for the activity
-        setSupportActionBar(displayPhotoToolbar);
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-
-        Intent intent = getIntent();
-        if (intent != null) {
-            Bundle bundle = intent.getExtras();
-            if (bundle != null) {
-                this.photoFilepath = bundle.getString(PHOTO_FILEPATH);
-                this.albumIndex = bundle.getInt(ALBUM_INDEX);
-            }
+        if (getIntent() != null && getIntent().getExtras() != null) {
+            Bundle bundle = getIntent().getExtras();
+            photoFilepath = bundle.getString(PHOTO_FILEPATH, "");
+            albumIndex = bundle.getInt(ALBUM_INDEX, -1);
         }
 
-        // display the given photo in the photoView
-        System.out.println("photoFilepath: " + photoFilepath);
-        displayPhoto(photoFilepath);
+        album = Photos.albumAt(albumIndex);
+        if (album == null || album.findByFilePath(photoFilepath) == null) {
+            Toast.makeText(this, R.string.photo_not_found, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
 
-        // set listeners for each of the buttons
-        prevPhotoButton.setOnClickListener(view -> prevPhoto());
-        nextPhotoButton.setOnClickListener(view -> nextPhoto());
-        addTagButton.setOnClickListener(view -> addTag());
-        removeTagButton.setOnClickListener(view -> removeTag());
-        moveButton.setOnClickListener(view -> movePhoto());
-        deleteButton.setOnClickListener(view -> deletePhoto());
-        backButton.setOnClickListener(view -> backToAlbum());
+        findViewById(R.id.prev_photo_button).setOnClickListener(view -> showAdjacent(-1));
+        findViewById(R.id.next_photo_button).setOnClickListener(view -> showAdjacent(1));
+        findViewById(R.id.add_tag).setOnClickListener(view -> addTag());
+        findViewById(R.id.remove_tag).setOnClickListener(view -> removeTag());
+        findViewById(R.id.move_button).setOnClickListener(view -> movePhoto());
+        findViewById(R.id.delete_button).setOnClickListener(view -> deletePhoto());
+        findViewById(R.id.back_button).setOnClickListener(view -> finish());
 
-        setTagsText();
-
-
+        bindCurrentPhoto();
     }
 
-    public void setTagsText() {
-        // set the text of tagsTextView to the tags of the photo
-        Album album = Photos.albums.get(albumIndex);
-        List<Photo> photos = album.getPhotos();
-        for (Photo p : photos) {
-            if (p.getFilePath().equals(photoFilepath)) {
-                List<Map<String, String>> tags = p.getTags();
-                StringBuilder tagsString = new StringBuilder();
-                for (Map<String, String> tag : tags) {
-                    String key = tag.keySet().iterator().next();
-                    String value = tag.get(key);
-                    tagsString.append(key).append(": ").append(value).append("\n");
-                }
-                tagsTextView.setText(tagsString.toString());
-                break;
-            }
+    private Photo currentPhoto() {
+        album = Photos.albumAt(albumIndex);
+        if (album == null) {
+            return null;
         }
+        return album.findByFilePath(photoFilepath);
+    }
+
+    private void bindCurrentPhoto() {
+        Photo photo = currentPhoto();
+        if (photo == null) {
+            finish();
+            return;
+        }
+        Glide.with(this)
+                .load(Uri.parse(photo.getFilePath()))
+                .fitCenter()
+                .into(photoView);
+        photoView.setContentDescription(getString(R.string.current_photo_content_description));
+        setTagsText(photo);
+    }
+
+    public void setTagsText(Photo photo) {
+        if (photo == null) {
+            tagsTextView.setText("");
+            return;
+        }
+        StringBuilder tagsString = new StringBuilder();
+        for (Tag tag : photo.getTags()) {
+            tagsString.append(tag.getKey()).append(": ").append(tag.getValue()).append('\n');
+        }
+        tagsTextView.setText(tagsString.toString());
     }
 
     public void removeTag() {
-        // create a pop up dialog (AlertDialog) to select the tag to remove
-        // remove the selected tag from the photo
-
-        System.out.println("removeTag");
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Select a tag to remove");
-
-        // create a list of tags to select from
-        Album album = Photos.albums.get(albumIndex);
-        List<Photo> photos = album.getPhotos();
-        final Photo[] photo = new Photo[1];
-        for (Photo p : photos) {
-            if (p.getFilePath().equals(photoFilepath)) {
-                photo[0] = p;
-                break;
-            }
+        Photo photo = currentPhoto();
+        if (photo == null) {
+            return;
         }
-
-
-        List<Map<String, String>> tags = photo[0].getTags();
+        List<Tag> tags = photo.getTags();
+        if (tags.isEmpty()) {
+            Toast.makeText(this, R.string.no_tags, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String[] tagStrings = new String[tags.size()];
         for (int i = 0; i < tags.size(); i++) {
-            Map<String, String> tag = tags.get(i);
-            String key = tag.keySet().iterator().next();
-            String value = tag.get(key);
-            tagStrings[i] = key + ": " + value;
+            tagStrings[i] = tags.get(i).toString();
         }
-
-        builder.setItems(tagStrings, (dialog, which) -> {
-            Map<String, String> tag = tags.get(which);
-            String key = tag.keySet().iterator().next();
-            String value = tag.get(key);
-            photo[0].deleteTag(key, value);
-            setTagsText();
-        });
-        builder.create().show();
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.remove_tag_title)
+                .setItems(tagStrings, (dialog, which) -> {
+                    Tag tag = tags.get(which);
+                    photo.deleteTag(tag.getKey(), tag.getValue());
+                    setTagsText(photo);
+                    Photos.saveAlbumsToFile(this);
+                })
+                .show();
     }
 
     public void addTag() {
-        System.out.println("addTag");
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Add Tag");
-
-        // tags can only be "person" or "location", so we can use a single-choice item dialog
-        String[] tags = {"person", "location"};
-        final int[] checkedItem = {0}; // this will be used to get the selected item
-
-        builder.setSingleChoiceItems(tags, 0, (dialog, which) -> checkedItem[0] = which);
-
+        String[] keys = {Tag.PERSON, Tag.LOCATION};
+        final int[] checkedItem = {0};
         EditText valueEditText = new EditText(this);
-        valueEditText.setHint("Value");
+        valueEditText.setHint(R.string.tag_value_hint);
         valueEditText.setInputType(InputType.TYPE_CLASS_TEXT);
 
-        builder.setView(valueEditText);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.add_tag_title)
+                .setSingleChoiceItems(keys, 0, (dialog, which) -> checkedItem[0] = which)
+                .setView(valueEditText)
+                .setPositiveButton(R.string.add, (dialog, which) -> {
+                    Photo photo = currentPhoto();
+                    if (photo == null) {
+                        return;
+                    }
+                    try {
+                        photo.addTag(keys[checkedItem[0]], valueEditText.getText().toString().trim());
+                        setTagsText(photo);
+                        Photos.saveAlbumsToFile(this);
+                    } catch (RuntimeException e) {
+                        Toast.makeText(this, R.string.tag_invalid, Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
 
-        builder.setPositiveButton("Add", (dialog, which) -> {
-            System.out.println("Pressed ok button");
-            String key = tags[checkedItem[0]];
-            String value = valueEditText.getText().toString();
+    public void showAdjacent(int delta) {
+        Photo photo = currentPhoto();
+        if (photo == null) {
+            return;
+        }
+        int index = album.indexOfFilePath(photoFilepath);
+        int next = index + delta;
+        if (index < 0 || next < 0 || next >= album.getSize()) {
+            Toast.makeText(this, R.string.no_more_photos, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        photoFilepath = album.getPhotos().get(next).getFilePath();
+        bindCurrentPhoto();
+    }
 
-            // get the current photo from the current album
-            Album album = Photos.albums.get(albumIndex);
-            List<Photo> photos = album.getPhotos();
-            final Photo[] photo = new Photo[1];
-            for (Photo p : photos) {
-                if (p.getFilePath().equals(photoFilepath)) {
-                    photo[0] = p;
-                    break;
+    public void movePhoto() {
+        Photo photo = currentPhoto();
+        if (photo == null) {
+            return;
+        }
+        List<Album> destinations = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        if (Photos.albums != null) {
+            for (Album candidate : Photos.albums) {
+                if (candidate.isTempAlbum) {
+                    continue;
                 }
+                names.add(candidate.getAlbumName());
+                destinations.add(candidate);
             }
-            // photo should not be null atp
-            try {
-                photo[0].addTag(key.toLowerCase(), value.toLowerCase());
-                setTagsText();
-                Photos.saveAlbumsToFile(this);
-            } catch (NullPointerException e) {
-                Toast.makeText(this, "Key or value cannot be null", Toast.LENGTH_SHORT).show();
-                return;
-            } catch (IllegalArgumentException e) {
-                Toast.makeText(this, "Key or value cannot be empty", Toast.LENGTH_SHORT).show();
-                return;
-            }
-        });
+        }
+        if (destinations.isEmpty()) {
+            Toast.makeText(this, R.string.no_albums, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.move_photo_title)
+                .setItems(names.toArray(new String[0]), (dialog, which) -> {
+                    Album target = destinations.get(which);
+                    Album source = sourceAlbumFor(photo);
+                    if (source == target) {
+                        Toast.makeText(this, R.string.photo_already_in_album, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    try {
+                        target.addPhoto(photo.copy());
+                    } catch (IllegalArgumentException e) {
+                        Toast.makeText(this, R.string.photo_already_in_album, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (source != null) {
+                        source.removePhoto(photo);
+                    }
+                    if (album.isTempAlbum) {
+                        album.removePhoto(photo);
+                    }
+                    Photos.saveAlbumsToFile(this);
+                    finish();
+                })
+                .show();
+    }
 
-        // save the changes
-        System.out.println("Added tag, saving changes");
+    private Album sourceAlbumFor(Photo photo) {
+        if (album != null && !album.isTempAlbum) {
+            return album;
+        }
+        if (Photos.albums == null) {
+            return null;
+        }
+        for (Album candidate : Photos.albums) {
+            if (!candidate.isTempAlbum && candidate.findByFilePath(photo.getFilePath()) != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    public void deletePhoto() {
+        Photo photo = currentPhoto();
+        if (photo == null) {
+            return;
+        }
+        Album source = sourceAlbumFor(photo);
+        if (source != null) {
+            source.removePhoto(photo);
+        }
+        if (album != null && album.isTempAlbum) {
+            album.removePhoto(photo);
+        }
         Photos.saveAlbumsToFile(this);
-        builder.create().show();
+        finish();
     }
 
     @Override
     public boolean onSupportNavigateUp() {
-        // go back to main activity
-        Intent intent = new Intent(this, Photos.class);
-        startActivity(intent);
+        finish();
         return true;
     }
 
-    public void nextPhoto() {
-        // go to the next photo in the album
-        // if there is no next photo, display a message saying that there are no more photos in the album
-        System.out.println("nextPhoto");
-        Album album = Photos.albums.get(albumIndex);
-        List<Photo> photos = album.getPhotos();
-        int index = -1;
-        for (int i = 0; i < photos.size(); i++) {
-            if (photos.get(i).getFilePath().equals(photoFilepath)) {
-                index = i;
-                break;
-            }
-        }
-        if (index == -1) {
-            System.out.println("Error: photo not found in album");
-            return;
-        }
-        if (index == photos.size() - 1) {
-            Toast.makeText(this, "No more photos in the album", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String nextPhotoFilepath = photos.get(index + 1).getFilePath();
-        Intent intent = new Intent(this, OpenPhoto.class);
-        Bundle bundle = new Bundle();
-        bundle.putString(OpenPhoto.PHOTO_FILEPATH, nextPhotoFilepath);
-        bundle.putInt(OpenPhoto.ALBUM_INDEX, albumIndex);
-        intent.putExtras(bundle);
-        startActivity(intent);
-        finish();
-    }
-
-
-    public void movePhoto() {
-        // create a pop up dialog (AlertDialog) to select the album to move the photo to
-        // move the photo to the selected album
-        // go back to the album view
-        System.out.println("movePhoto");
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Select an album to move the photo to");
-
-        // create a list of albums to select from
-        String[] albumNames = new String[Photos.albums.size()];
-        for (int i = 0; i < Photos.albums.size(); i++) {
-            albumNames[i] = Photos.albums.get(i).getAlbumName();
-        }
-
-        builder.setItems(albumNames, (dialog, which) -> {
-            // make sure the album selected is not the current album
-
-            // move the photo to the selected album
-            Album album = Photos.albums.get(which);
-
-            Photo photoToAdd = new Photo(photoFilepath);
-            try {
-                album.addPhoto(photoToAdd);
-            } catch (IllegalArgumentException e) {
-                Toast.makeText(this, "Photo already exists in the album", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // delete the photo from the current album
-            Album currentAlbum = Photos.albums.get(albumIndex);
-            System.out.println("(before) current album size: " + currentAlbum.getSize());
-            for (int i = 0; i < currentAlbum.getSize(); i++) {
-                if (currentAlbum.getPhotos().get(i).getFilePath().equals(photoFilepath)) {
-                    // remove item at index i
-                    currentAlbum.removePhoto(currentAlbum.getPhotos().get(i));
-                }
-            }
-            // print current album size
-            System.out.println("(after) current album size: " + currentAlbum.getSize());
-            // finish();
-            backToAlbum();
-            // it works when you do backToAlbum, but not finish()
-            // problem: back button only works properly when you do finish(). same with deletePhoto().
-        });
-        builder.create().show();
-
-    }
-
-    public void deletePhoto() {
-        // delete the photo from the album
-        // go back to the album view
-        System.out.println("deletePhoto");
-        Album album = Photos.albums.get(albumIndex);
-        for (int i = 0; i < album.getSize(); i++) {
-            if (album.getPhotos().get(i).getFilePath().equals(photoFilepath)) {
-                album.removePhoto(album.getPhotos().get(i));
-            }
-        }
-
-
-        backToAlbum();
-    }
-
-
-    public void prevPhoto() {
-        // go to the previous photo in the album
-        // if there is no previous photo, display a message saying that there are no more photos in the album
-        System.out.println("prevPhoto");
-        Album album = Photos.albums.get(albumIndex);
-        List<Photo> photos = album.getPhotos();
-        int index = -1;
-        for (int i = 0; i < photos.size(); i++) {
-            if (photos.get(i).getFilePath().equals(photoFilepath)) {
-                index = i;
-                break;
-            }
-        }
-        if (index == -1) {
-            System.out.println("Error: photo not found in album");
-            return;
-        }
-        if (index == 0) {
-            Toast.makeText(this, "No more photos in the album", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String prevPhotoFilepath = photos.get(index - 1).getFilePath();
-        Intent intent = new Intent(this, OpenPhoto.class);
-        Bundle bundle = new Bundle();
-        bundle.putString(OpenPhoto.PHOTO_FILEPATH, prevPhotoFilepath);
-        bundle.putInt(OpenPhoto.ALBUM_INDEX, albumIndex);
-        intent.putExtras(bundle);
-        startActivity(intent);
-        finish();
-    }
-
-    public void backToAlbum() {
-        // save the changes
-        Photos.saveAlbumsToFile(this);
-        // go back to the album view
-        Intent intent = new Intent(this, OpenAlbum.class);
-        Bundle bundle = new Bundle();
-        bundle.putInt(OpenAlbum.ALBUM_INDEX, albumIndex);
-        intent.putExtras(bundle);
-        startActivity(intent);
-        finish();
-    }
-
-    public void displayPhoto(String photoFilepath) {
-        photoView.setImageURI(Uri.parse(photoFilepath));
-    }
-
-    // on destroy, save the changes
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        Photos.saveAlbumsToFile(this);
-    }
-
-    // on pause, save the changes
     @Override
     protected void onPause() {
         super.onPause();
         Photos.saveAlbumsToFile(this);
     }
-
-
 }

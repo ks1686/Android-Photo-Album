@@ -1,30 +1,36 @@
 <resources>
     <string name="app_name">Albums</string>
-    <string-array name="movies_array">
-        <item>Bullet Train|2022</item>
-        <item>Top Gun: Maverick|2022</item>
-        <item>The Power of the Dog|2021</item>
-        <item>Minari|2020</item>
-        <item>Once Upon a Time in Hollywood|2019</item>
-        <item>Widows|2018</item>
-        <item>Black Panther|2018</item>
-        <item>Get Out|2017</item>
-        <item>Logan|2017</item>
-        <item>Doctor Strange|2016</item>
-        <item>Jason Bourne|2016</item>
-        <item>Sully|2016</item>
-        <item>The Martian|2015</item>
-        <item>Mad Max:Fury Road|2015</item>
-        <item>Sicario|2015</item>
-        <item>American Sniper|2014</item>
-        <item>The Gift|2010</item>
-    </string-array>
-
-    <string name="name_label">Name: (required)</string>
-    <string name="year_label">Year: (required)</string>
-    <string name="director_label">Director:</string>
-    <string name="year_hint">2023</string>
-    <string name="save_label">SAVE</string>
-    <string name="cancel_label">CANCEL</string>
     <string name="menu_add">Add</string>
+    <string name="search_hint">Search (person=Ada AND location=Paris)</string>
+    <string name="search_no_results">No photos matched that query</string>
+    <string name="search_invalid_query">Use key=value, optionally with one AND or OR</string>
+    <string name="create_album_title">Create Album</string>
+    <string name="album_name_empty">Album name cannot be empty</string>
+    <string name="album_name_exists">An album with that name already exists</string>
+    <string name="album_not_found">Album not found</string>
+    <string name="album_renamed">Album renamed</string>
+    <string name="photo_already_in_album">Photo already exists in the album</string>
+    <string name="photo_not_found">Photo not found</string>
+    <string name="photo_content_description">Album photo %1$d</string>
+    <string name="current_photo_content_description">Current photo</string>
+    <string name="no_tags">This photo has no tags</string>
+    <string name="remove_tag_title">Select a tag to remove</string>
+    <string name="add_tag_title">Add Tag</string>
+    <string name="tag_value_hint">Value</string>
+    <string name="add">Add</string>
+    <string name="tag_invalid">Tag key must be person or location, and value cannot be empty</string>
+    <string name="no_more_photos">No more photos in the album</string>
+    <string name="move_photo_title">Move photo to album</string>
+    <string name="no_albums">No albums available</string>
+    <string name="delete_album">Delete Album</string>
+    <string name="add_photo">Add Photo</string>
+    <string name="rename">Rename</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="remove_tag">Remove Tag</string>
+    <string name="add_tag">Add Tag</string>
+    <string name="move">Move</string>
+    <string name="delete">Delete</string>
+    <string name="back">Back</string>
+    <string name="album_name">Album name</string>
 </resources>

@@ -1,67 +1,66 @@
 package com.example.photos;
 
-import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 
 public class Photo implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-    private String filepath;
-    private List<Map<String, String>> tags;
+    private final String filepath;
+    private final List<Tag> tags;
 
-    public Photo(String filepath, List<Map<String, String>> tags) throws NullPointerException, IllegalArgumentException {
-        /*File file = new File(filepath);
-
-        if (!file.exists()) {
-            throw new IllegalArgumentException("File does not exist");
-        }*/
-
+    public Photo(String filepath, List<Tag> tags) {
+        if (filepath == null) {
+            throw new NullPointerException("filepath cannot be null");
+        }
         if (filepath.isEmpty()) {
             throw new IllegalArgumentException("filepath cannot be empty");
         }
-
-        /*if (!(filepath.endsWith(".bmp") || filepath.endsWith(".gif") || filepath.endsWith(".jpeg") || filepath.endsWith(".png") || filepath.endsWith(".jpg"))) {
-            throw new IllegalArgumentException("File must be a BMP, GIF, JPEG, or PNG file");
-        }*/
-
-        if (tags == null) {
-            this.tags = new ArrayList<>();
-        } else {
-            this.tags = tags;
-        }
-
         this.filepath = filepath;
+        this.tags = new ArrayList<>();
+        if (tags != null) {
+            this.tags.addAll(tags);
+        }
     }
 
     public Photo(String filepath) {
-        this(filepath, new ArrayList<Map<String, String>>());
+        this(filepath, new ArrayList<>());
     }
 
-    public Photo(String filepath, String caption) {
-        this(filepath, new ArrayList<Map<String, String>>());
+    public Photo copy() {
+        List<Tag> copiedTags = new ArrayList<>();
+        for (Tag tag : tags) {
+            copiedTags.add(new Tag(tag.getKey(), tag.getValue()));
+        }
+        return new Photo(filepath, copiedTags);
     }
 
+    @Override
     public boolean equals(Object obj) {
         if (obj == this) {
             return true;
         }
-
         if (!(obj instanceof Photo)) {
             return false;
         }
-
         Photo photo = (Photo) obj;
         return filepath.equals(photo.filepath);
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(filepath);
+    }
+
     public void deleteTag(String key, String value) {
         for (int i = 0; i < tags.size(); i++) {
-            if (tags.get(i).containsKey(key) && tags.get(i).containsValue(value)) {
+            Tag tag = tags.get(i);
+            if (tag.getKey().equalsIgnoreCase(key) && tag.getValue().equals(value)) {
                 tags.remove(i);
-                break;
+                return;
             }
         }
     }
@@ -70,33 +69,25 @@ public class Photo implements Serializable {
         return filepath;
     }
 
-    public List<Map<String, String>> getTags() {
-        return tags;
+    public List<Tag> getTags() {
+        return Collections.unmodifiableList(tags);
     }
 
-    public void addTag(String key, String value) throws NullPointerException {
-        if (key == null) {
-            throw new NullPointerException("key cannot be null");
-        } else if (key.isEmpty()) {
-            throw new IllegalArgumentException("key cannot be empty");
-        }
-
-        if (value == null) {
-            throw new NullPointerException("value cannot be null");
-        } else if (value.isEmpty()) {
-            throw new IllegalArgumentException("value cannot be empty");
-        }
-
-        if (!key.equals("person") && !key.equals("location")) {
-            throw new IllegalArgumentException("key must be either 'person' or 'location'");
-        }
-
-        Map<String, String> tag = new HashMap<>();
-        tag.put(key, value);
-        tags.add(tag);
+    public void addTag(String key, String value) {
+        tags.add(new Tag(key, value));
     }
 
+    public boolean hasTagMatch(String key, String valuePrefix) {
+        for (Tag tag : tags) {
+            if (tag.matches(key, valuePrefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public String toString() {
-        return String.format("Photo: %s || Tags: %s", filepath, tags.toString());
+        return String.format("Photo: %s || Tags: %s", filepath, tags);
     }
 }

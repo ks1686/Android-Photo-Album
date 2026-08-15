@@ -5,8 +5,12 @@ Contributors:
 - Jude Jacob
 
 # How to Search
-Type in the format below, replacing the strings 'key' and 'value' as needed:
+Type a tag query and press search/enter:
 
+```
 key=value
+person=Ada AND location=Paris
+person=Ada OR location=New York
+```
 
-Auto completion *is* implemented, just click on the respective photo to see the tags and confirm this.
+Keys are `person` or `location`. Matching is case-insensitive prefix search. Values may contain spaces. At most one `AND` or `OR` is allowed.

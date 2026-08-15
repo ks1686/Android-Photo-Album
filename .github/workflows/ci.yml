@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests, lint, assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Test, lint, and assemble
+        run: |
+          set -o pipefail
+          log="${RUNNER_TEMP}/gradle.log"
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug 2>&1 | tee "${log}"; then
+              exit 0
+            fi
+            if grep -q "Received status code 429" "${log}"; then
+              echo "Maven rate-limited (attempt ${attempt}); retrying"
+              sleep $((attempt * 20))
+              continue
+            fi
+            exit 1
+          done
+          exit 1
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
