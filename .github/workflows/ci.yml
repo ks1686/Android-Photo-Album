@@ -29,6 +29,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -41,14 +42,22 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Run JVM unit tests
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
-
-      - name: Run Android lint
-        run: ./gradlew --no-daemon :app:lintDebug
-
-      - name: Assemble debug APK
-        run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Test, lint, and assemble
+        run: |
+          set -o pipefail
+          log="${RUNNER_TEMP}/gradle.log"
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug 2>&1 | tee "${log}"; then
+              exit 0
+            fi
+            if grep -q "Received status code 429" "${log}"; then
+              echo "Maven rate-limited (attempt ${attempt}); retrying"
+              sleep $((attempt * 20))
+              continue
+            fi
+            exit 1
+          done
+          exit 1
 
       - name: Upload test and lint reports
         if: always()
