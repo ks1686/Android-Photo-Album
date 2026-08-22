@@ -4,6 +4,12 @@ A modern Android photo album application built with Material 3, AndroidX, and mo
 Java. Create albums, add photos, tag them with `person` and `location`, and
 search across every album with a small query language.
 
+## Screenshots
+
+| Albums | Album grid | Photo detail | Search results |
+|---|---|---|---|
+| ![Albums list](docs/screenshots/albums.png) | ![Album grid](docs/screenshots/album-grid.png) | ![Photo detail](docs/screenshots/photo-detail.png) | ![Search results](docs/screenshots/search-results.png) |
+
 ## Features
 
 - **Albums** — create, rename, and delete albums.
@@ -54,16 +60,15 @@ app/
 
 ### Requirements
 
-- Android Studio (Koala 2024.1.1 or newer) or command-line
-- JDK 21
-- Android SDK with `platforms;android-34`, `build-tools;34.0.0`
+- Android Studio (Narwhal 2025.1.1 or newer) or command-line
+- JDK 17 or newer (CI uses 21)
+- Android SDK with `platforms;android-36`, `build-tools;36.0.0`
 - The Gradle wrapper (`./gradlew`) handles everything else
 
 ### From a terminal
 
 ```bash
 # 1. Point gradle at your SDK
-mkdir -p gradle/wrapper
 echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 
 # 2. Build + run unit tests
@@ -92,9 +97,12 @@ lint, assemble — on every push and pull request to `main`.
 
 ## Tech stack
 
-- **Android 14 (SDK 34)** — `compileSdk=34`, `targetSdk=34`, `minSdk=26` (Android 8.0).
-- **Material 3** — `com.google.android.material:material:1.10.0`
-- **AndroidX** — AppCompat, Activity, ConstraintLayout, RecyclerView, Test.
+- **Android 16 (SDK 36)** — `compileSdk=36`, `targetSdk=36`, `minSdk=26` (Android 8.0).
+  Edge-to-edge content under system bars, handled via insets-aware layouts.
+- **AGP 8.13.2 / Gradle 8.13** — Java 17 toolchain (`sourceCompatibility=17`).
+- **Material 3** — `com.google.android.material:material:1.12.0`
+- **AndroidX** — AppCompat 1.7.1, Activity 1.10.1, ConstraintLayout 2.2.1,
+  RecyclerView 1.4.0.
 - **Glide 4.16.0** — image loading with persistent URI permissions.
 - **JSON** — `org.json:json:20240303` for the test classpath; Android's built-in
   `org.json` for the runtime.
