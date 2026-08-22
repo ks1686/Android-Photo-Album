@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Albums</string>
     <string name="menu_add">Add</string>
-    <string name="search_hint">Search (person=Ada AND location=Paris)</string>
+    <string name="search_hint">Search all albums (person=Ada AND location=Paris)</string>
     <string name="search_no_results">No photos matched that query</string>
     <string name="search_invalid_query">Use key=value, optionally with one AND or OR</string>
     <string name="create_album_title">Create Album</string>

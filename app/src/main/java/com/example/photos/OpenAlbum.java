@@ -145,6 +145,7 @@ public class OpenAlbum extends AppCompatActivity {
         setSupportActionBar(myToolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setTitle(album.getAlbumName());
         }
         myToolbar.setNavigationOnClickListener(view -> finish());
 

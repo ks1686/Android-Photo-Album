@@ -2,11 +2,7 @@
 <resources>
     <color name="black">#080b0f</color>
     <color name="white">#f3f4f4</color>
-    <color name="movieBack">#ffe066</color>
-    <color name="movieFore">#000000</color>
     <color name="background">#0f1a26</color>
-    <color name="red">#ff1157</color>
     <color name="blue">#34a3d8</color>
     <color name="green">#0fffad</color>
-    <color name="yellow">#e2c550</color>
 </resources>

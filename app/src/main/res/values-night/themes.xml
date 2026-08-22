@@ -3,5 +3,8 @@
     <style name="Base.Theme.Photos" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/blue</item>
         <item name="colorOnPrimary">@color/white</item>
+        <!-- Matches the list background so edge-to-edge system-bar insets
+             blend with the app's dark canvas instead of flashing theme grey. -->
+        <item name="android:windowBackground">@color/background</item>
     </style>
 </resources>
